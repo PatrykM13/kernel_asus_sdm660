@@ -215,6 +215,8 @@ static int hid_add_usage(struct hid_parser *parser, unsigned usage, u8 size)
 			(usage & 0xffff) + (parser->global.usage_page << 16);
 	else
 		parser->local.usage[parser->local.usage_index] = usage;
+
+
 	parser->local.usage_size[parser->local.usage_index] = size;
 	parser->local.collection_index[parser->local.usage_index] =
 		parser->collection_stack_ptr ?
@@ -360,8 +362,6 @@ static int hid_parser_global(struct hid_parser *parser, struct hid_item *item)
 
 	case HID_GLOBAL_ITEM_TAG_USAGE_PAGE:
 		parser->global.usage_page = item_udata(item);
-		if (parser->local.usage_page_preceding == 1)
-			parser->local.usage_page_preceding = 2;
 		return 0;
 
 	case HID_GLOBAL_ITEM_TAG_LOGICAL_MINIMUM:
@@ -542,17 +542,28 @@ static int hid_parser_local(struct hid_parser *parser, struct hid_item *item)
 static void hid_concatenate_usage_page(struct hid_parser *parser)
 {
 	int i;
+	unsigned int usage_page;
 
 	if (parser->local.usage_page_preceding == 3) {
 		dbg_hid("Using preceding usage page for final usage\n");
 		return;
 	}
 
-	for (i = 0; i < parser->local.usage_index; i++)
-		if (parser->local.usage_size[i] <= 2)
-			parser->local.usage[i] =
-				(parser->global.usage_page << 16)
-				+ (parser->local.usage[i] & 0xffff);
+	if (!parser->local.usage_index)
+		return;
+
+	usage_page = parser->global.usage_page;
+
+	/*
+	 * Concatenate usage page again only if last declared Usage Page
+	 * has not been already used in previous usages concatenation
+	 */
+	for (i = parser->local.usage_index - 1; i >= 0; i--) {
+		if (parser->local.usage_size[i] > 2)
+			/* Ignore extended usages */
+			continue;
+
+	}
 }
 
 /*
